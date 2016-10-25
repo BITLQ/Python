@@ -1,0 +1,191 @@
+最近在学习python的时候遇到一个头疼的问题，就是在IDLE下编程的时候不能像windows或者Linux的终端一样，”Ctrl+l”的快捷键实现清屏的操作，于是在网上找了一下资料，最后在知乎上发现最好的方法是需要自己配置，其中我做了些许修改，具体的过程如下：
+
+1、配置文件内容：
+
+"""
+
+Clear Window Extension
+Version: 0.2
+
+Author: Roger D. Serwy
+        roger.serwy@gmail.com
+
+Date: 2009-06-14
+
+It provides "Clear Shell Window" under "Options"
+with ability to undo.
+
+Add these lines to config-extensions.def
+
+[ClearWindow]
+enable=1
+enable_editor=0
+enable_shell=1
+[ClearWindow_cfgBindings]
+clear-window=<Control-Key-l>
+
+
+"""
+
+class ClearWindow:
+
+    menudefs = [
+        ('options', [None,
+               ('Clear Shell Window', '<<clear-window>>'),
+       ]),]
+
+    def __init__(self, editwin):
+        self.editwin = editwin
+        self.text = self.editwin.text
+        self.text.bind("<<clear-window>>", self.clear_window2)
+
+        self.text.bind("<<undo>>", self.undo_event)  # add="+" doesn't work
+
+    def undo_event(self, event):
+        text = self.text
+
+        text.mark_set("iomark2", "iomark")
+        text.mark_set("insert2", "insert")
+        self.editwin.undo.undo_event(event)
+
+        # fix iomark and insert
+        text.mark_set("iomark", "iomark2")
+        text.mark_set("insert", "insert2")
+        text.mark_unset("iomark2")
+        text.mark_unset("insert2")
+
+
+    def clear_window2(self, event): # Alternative method
+        # work around the ModifiedUndoDelegator
+        text = self.text
+        text.undo_block_start()
+        text.mark_set("iomark2", "iomark")
+        text.mark_set("iomark", 1.0)
+        text.delete(1.0, "iomark2 linestart")
+        text.mark_set("iomark", "iomark2")
+        text.mark_unset("iomark2")
+        text.undo_block_stop()
+        if self.text.compare('insert', '<', 'iomark'):
+            self.text.mark_set('insert', 'end-1c')
+        self.editwin.set_line_and_column()
+
+    def clear_window(self, event):
+        # remove undo delegator
+        undo = self.editwin.undo
+        self.editwin.per.removefilter(undo)
+
+        # clear the window, but preserve current command
+        self.text.delete(1.0, "iomark linestart")
+        if self.text.compare('insert', '<', 'iomark'):
+            self.text.mark_set('insert', 'end-1c')
+        self.editwin.set_line_and_column()
+
+        # restore undo delegator
+        self.editwin.per.insertfilter(undo)
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+21
+22
+23
+24
+25
+26
+27
+28
+29
+30
+31
+32
+33
+34
+35
+36
+37
+38
+39
+40
+41
+42
+43
+44
+45
+46
+47
+48
+49
+50
+51
+52
+53
+54
+55
+56
+57
+58
+59
+60
+61
+62
+63
+64
+65
+66
+67
+68
+69
+70
+71
+72
+73
+74
+75
+76
+77
+78
+79
+80
+81
+2、拷贝以上内容，记住命名为ClearWindow.py放在Python安装目录Python XXX\Lib\idlelib下面（XXX为你的python版本）。 
+3、记事本打开Python XXX\Lib\idlelib目录下的config-extensions.def（IDLE扩展的配置文件）， 为防止出错，你可以在打开它之前先copy一个备份 。 
+4、修改config-extensions.def ，在末尾添加如下内容，然后保存退出：
+
+[ClearWindow]
+enable=1
+enable_editor=0
+enable_shell=1
+[ClearWindow_cfgBindings]
+clear-window=<Control-Key-;>
+//可以直接设置为<Control-Key-l>即“Ctrl+l”快捷键
+1
+2
+3
+4
+5
+6
+7
+5、打开Python的IDLE，options选项中就可以看到增加了Clear shell window ctrl+;。 
+6、在IDLE输入代码，然后按Ctrl+l（是指Ctrl和l），发现刚输入代码可以被清除了。
+
+说明：
+
+快捷键Ctrl+;,可修改成其他键，将“clear-window=<Control-Key-;>”里的Control和;修改成其他键即可。 经试验，Control换成Alter时，会启动不了IDLE，换成Shift时，快捷键不起作用，因为Shift+l，直接变成输入l了。
+
+注：这里有个很坑的地方就是下载保存的配置文件名一定要与在config-extensions.def中添加的[ClearWindow]内容中的名字一致，要不然找不到配置文件的，注意大小写！！！
