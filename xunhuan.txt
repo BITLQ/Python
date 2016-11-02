@@ -1,0 +1,25 @@
+
+#求1到100的和
+# sum = 0
+# for x in list(range(101)):
+#     sum += x
+# print(sum)
+
+
+#求前一百个数中的奇数和
+# sum = 0
+# n = 99
+# while n>0:
+#     sum += n
+#     n = n - 2
+#  print(sum)
+
+ #请利用循环依次对list中的每个名字打印出Hello, xxx!：
+ #-*- coding: utf-8 -*-
+
+# L = ['Bart', 'Lisa', 'Adam']
+# i = 0
+# len = len(L)
+# while i < len:
+#     print(L[i])
+#     i += 1
