@@ -1,0 +1,73 @@
+import socket
+import struct
+import os
+import time
+import sys
+GROUP_IP = '224.3.29.71'
+
+
+def __Client__(local_path, dest_path):
+    server_addr = ('', 10000)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(server_addr)
+    addgroup = socket.inet_aton(GROUP_IP)
+    mreq = struct.pack('4sL', addgroup, socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+
+    try:
+            while True:
+                    data, addr = sock.recvfrom(1024)
+                    try:
+                            print "do os.link"
+                            os.link(local_path, dest_path)
+                    except:
+                            sock.sendto("False", addr)
+                    else:
+                            sock.sendto("True", addr)
+    except:
+            sock.close()
+
+
+def __Server__(dest_path, num):
+    group = (GROUP_IP, 10000)
+    ADDR = ('', 10000)
+    num = int(num)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(ADDR)
+    ttl = struct.pack('b', 1)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
+
+    try:
+            while num:
+                    sock.sendto("1", group)
+                    count = 0
+                    while True:
+                            data, addr = sock.recvfrom(16)
+                            print data
+                            print addr
+                            count = count + 1
+                            if (count == 2):
+                                    break
+                    if os.path.exists(dest_path):
+                            os.unlink(dest_path)
+                            print "unlink"
+                    num = num - 1
+                    time.sleep(2)
+    except:
+            print "close is running"
+            sock.close()
+
+
+def __Main__():
+    arglen = len(sys.argv)
+    if arglen == 7 and sys.argv[1] == "S":
+            os.system("mount.nfs -o noatime,nodiratime,nolock %s %s"
+                      % (sys.argv[3], sys.argv[4]))
+            __Server__(sys.argv[6], sys.argv[2])
+    elif arglen == 4 and sys.argv[1] == "C":
+            __Client__(sys.argv[2],  sys.argv[3])
+    else:
+            print "the argument is fault"
+
+if __name__ == '__main__':
+    __Main__()
