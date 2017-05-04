@@ -1,0 +1,143 @@
+import socket
+import struct
+import os
+import time
+import argparse
+import sys
+
+GROUP_IP = '224.3.29.71'
+
+
+def __Client__(local_path, dest_path):
+    server_addr = ('', 10000)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(server_addr)
+    addgroup = socket.inet_aton(GROUP_IP)
+    mreq = struct.pack('4sL', addgroup, socket.INADDR_ANY)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+    sock.settimeout(60)
+    try:
+        while True:
+            data, addr = sock.recvfrom(1024)
+            try:
+                os.link(local_path, dest_path)
+            except:
+                sock.sendto("False", addr)
+            else:
+                sock.sendto("True", addr)
+    except:
+        sock.close()
+    finally:
+        sock.close()
+
+
+def __Server__(dest_path, num, clients):
+    group = (GROUP_IP, 10000)
+    ADDR = ('', 10000)
+    num = int(num)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    sock.bind(ADDR)
+    ttl = struct.pack('b', 1)
+    sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
+    sock.settimeout(4)
+    times = 0
+    sums = num
+    sumS = 0
+    sumD = 0
+    print "          addr   |            True/False       \
+  |       success times     |  running times/sum times  |  \
+  meantime success  | meantime failure"
+    d1 = {}
+    d2 = {}
+    try:
+        while num:
+            sock.sendto("1", group)
+            count = 0
+            meantimeS = 0
+            meantimeD = 0
+            while True:
+                # sum
+                data, addr = sock.recvfrom(16)
+                if data == "True":
+                    d1[addr] = '1'
+                    if addr in d2:
+                        d2[addr] = d2[addr] + 1
+                    else:
+                        d2[addr] = 1
+                else:
+                    d1[addr] = '0'
+                    if addr not in d2:
+                        d2[addr] = 0
+                if data is not None:
+                    count = count + 1
+                if (count == clients):
+                    times = times + 1
+                    break
+            # test the same time success or default
+            for key in d1:
+                if d1[key] == '1':
+                    meantimeS = meantimeS + 1
+                else:
+                    meantimeD = meantimeD + 1
+            if meantimeS == len(d1) and len(d1) != 1:
+                sumS = sumS + 1
+            if meantimeD == len(d1) and len(d1) != 1:
+                sumD = sumD + 1
+            if os.path.exists(dest_path):
+                os.unlink(dest_path)
+            for (key1, key2) in zip(d1, d2):
+                print key1, '            ', d1[key1], '          ' \
+                    '           ', d2[key2], '                    '\
+                    '%5d/%d' % (times, sums), '                    '\
+                    '    ', sumS, '               ', sumD
+                sys.stdout.flush()
+            sys.stdout.flush()
+            for i in range(len(d1)):
+                print "\b\r",
+            sys.stdout.flush()
+
+            num = num - 1
+            time.sleep(0.5)
+        #print all node success times
+        sum = 0
+        for key in d2:
+            sum = sum + d2[key]
+        print "\n"
+        print '                                               '\
+            '        sum = %5d times' % sum
+    except socket.timeout:
+        print "socket timeout!!!"
+    except:
+        print "Server codeing fault or The keyboard interrupt!!!"
+    finally:
+        sock.close()
+
+
+def __Main__():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-m", "--CS", help="mothod select")
+    parser.add_argument("-ms", "--mount_srcpath", help="nfs export")
+    parser.add_argument("-md", "--mount_destpath", help="the mount point")
+    parser.add_argument("-fs", "--srcfilename", help="os_link_srcfilename")
+    parser.add_argument("-fd", "--destfilename", help="os_link_destfilename")
+    parser.add_argument("-t", "--times", help="test times", type=int)
+    parser.add_argument("-c", "--clients", help="the number of client",
+                        type=int)
+
+    args = parser.parse_args()
+    os.system("mount.nfs -o noatime,nodiratime,nolock %s %s"
+              % (args.mount_srcpath, args.mount_destpath))
+    if args.CS == "S":
+        __Server__(args.destfilename, args.times, args.clients)
+    elif args.CS == "C":
+        if not os.path.exists(args.srcfilename):
+            os.mknod(args.srcfilename)
+        __Client__(args.srcfilename, args.destfilename)
+    else:
+        print args.CS
+
+
+if __name__ == '__main__':
+    __Main__()
