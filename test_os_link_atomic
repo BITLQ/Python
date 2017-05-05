@@ -8,7 +8,7 @@ import sys
 GROUP_IP = '224.3.29.71'
 
 
-def __Client__(local_path, dest_path):
+def __client__(local_path, dest_path):
     server_addr = ('', 10000)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -26,44 +26,43 @@ def __Client__(local_path, dest_path):
                 sock.sendto("False", addr)
             else:
                 sock.sendto("True", addr)
-    except:
+    except socket.timeout:
         sock.close()
     finally:
         sock.close()
 
 
-def __Server__(dest_path, num, clients):
+def __server__(dest_path, num, clients):
     group = (GROUP_IP, 10000)
-    ADDR = ('', 10000)
+    addrdress = ('', 10000)
     num = int(num)
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     # sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(ADDR)
+    sock.bind(addrdress)
     ttl = struct.pack('b', 1)
     sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, ttl)
     sock.settimeout(4)
     times = 0
     sums = num
-    sumS = 0
-    sumD = 0
-    print "          addr   |            True/False       \
-  |       success times     |  running times/sum times  |  \
-  meantime success  | meantime failure"
+    sumsu = 0
+    sumd = 0
+    print('%25s|%8s|%8s|%8s|%8s' % (
+        'address', 'cur', 'status', 'progress', 'error'))
     d1 = {}
     d2 = {}
     try:
         while num:
             sock.sendto("1", group)
             count = 0
-            meantimeS = 0
-            meantimeD = 0
+            meantimes = 0
+            meantimed = 0
             while True:
                 # sum
                 data, addr = sock.recvfrom(16)
                 if data == "True":
                     d1[addr] = '1'
                     if addr in d2:
-                        d2[addr] = d2[addr] + 1
+                        d2[addr] += 1
                     else:
                         d2[addr] = 1
                 else:
@@ -71,39 +70,39 @@ def __Server__(dest_path, num, clients):
                     if addr not in d2:
                         d2[addr] = 0
                 if data is not None:
-                    count = count + 1
-                if (count == clients):
-                    times = times + 1
+                    count += 1
+                if count == clients:
+                    times += 1
                     break
             # test the same time success or default
             for key in d1:
                 if d1[key] == '1':
-                    meantimeS = meantimeS + 1
+                    meantimes += 1
                 else:
-                    meantimeD = meantimeD + 1
-            if meantimeS == len(d1) and len(d1) != 1:
-                sumS = sumS + 1
-            if meantimeD == len(d1) and len(d1) != 1:
-                sumD = sumD + 1
+                    meantimed += 1
+            if meantimes == len(d1) and len(d1) != 1:
+                sumsu += 1
+            if meantimed == len(d1) and len(d1) != 1:
+                sumd += 1
             if os.path.exists(dest_path):
                 os.unlink(dest_path)
             for (key1, key2) in zip(d1, d2):
-                print key1, '            ', d1[key1], '          ' \
-                    '           ', d2[key2], '                    '\
-                    '%5d/%d' % (times, sums), '                    '\
-                    '    ', sumS, '               ', sumD
+                print('%25s|%8s|%8s|%8s|%8s' % (
+                    key1, d1[key1], d2[key2],
+                    '%d/%d' % (times, sums),
+                    '%d/%d' % (sumsu, sumd)))
                 sys.stdout.flush()
             sys.stdout.flush()
             for i in range(len(d1)):
                 print "\b\r",
             sys.stdout.flush()
 
-            num = num - 1
+            num -= 1
             time.sleep(0.5)
         #print all node success times
         sum = 0
         for key in d2:
-            sum = sum + d2[key]
+            sum += d2[key]
         print "\n"
         print '                                               '\
             '        sum = %5d times' % sum
@@ -115,7 +114,21 @@ def __Server__(dest_path, num, clients):
         sock.close()
 
 
-def __Main__():
+def _read_mounts():
+    with open('/proc/self/mountinfo', 'r') as f:
+        out = f.read()
+    lines = out.split('\n')
+    mounts = {}
+    for line in lines:
+        tokens = line.split()
+        if len(tokens) == 11:
+            device = tokens[9]
+            mnt_point = tokens[4]
+            mounts[mnt_point] = device
+    return mounts
+
+
+def __mainfunc__():
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--CS", help="mothod select")
     parser.add_argument("-ms", "--mount_srcpath", help="nfs export")
@@ -127,17 +140,18 @@ def __Main__():
                         type=int)
 
     args = parser.parse_args()
-    os.system("mount.nfs -o noatime,nodiratime,nolock %s %s"
-              % (args.mount_srcpath, args.mount_destpath))
+    if args.mount_destpath not in _read_mounts():
+        os.system("mount.nfs -o noatime,nodiratime,nolock %s %s"
+                  % (args.mount_srcpath, args.mount_destpath))
     if args.CS == "S":
-        __Server__(args.destfilename, args.times, args.clients)
+        __server__(args.destfilename, args.times, args.clients)
     elif args.CS == "C":
         if not os.path.exists(args.srcfilename):
             os.mknod(args.srcfilename)
-        __Client__(args.srcfilename, args.destfilename)
+        __client__(args.srcfilename, args.destfilename)
     else:
         print args.CS
 
 
 if __name__ == '__main__':
-    __Main__()
+    __mainfunc__()
