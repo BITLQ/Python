@@ -1,0 +1,128 @@
+from __future__ import division
+import threading
+import signal
+import os
+import argparse
+import time
+
+io_flag = 0
+
+rlist = []
+wlist = []
+filename1 = []
+filename2 = []
+
+
+def signal_int_handler(signum, fram):
+    for _path in filename1:
+        os.remove(_path)
+    for _path in filename2:
+        os.remove(_path)
+    exit(0)
+
+
+def io_thread_handler(cmd):
+    while True:
+        ret = os.system(cmd)
+        if ret != 0:
+            break
+
+
+def __io_func(rnums, rspeed, wnums, wspeed):
+    signal.signal(signal.SIGINT, signal_int_handler)
+    for i in range(rnums):
+        filename = "/home/test_lq/-%d.py" % i
+        if not os.path.exists(filename):
+            os.mknod(filename)
+        filename2.append(filename)
+        cmd = "rsync -a --bwlimit=%d %s /home/" % (rspeed, filename)
+        t = threading.Thread(target=io_thread_handler, args=(cmd,))
+        rlist.append(t)
+    for i in range(wnums):
+        filename = "/home/%d.py" % i
+        if not os.path.exists(filename):
+            os.mknod(filename)
+        filename1.append(filename)
+        cmd = "rsync -a --bwlimit=%d %s /home/test_lq" % (wspeed, filename)
+        t = threading.Thread(target=io_thread_handler, args=(cmd,))
+        wlist.append(t)
+
+    for t in rlist:
+        t.start()
+    for p in wlist:
+        p.start()
+    while True:
+        global io_flag
+        if io_flag == 1:
+            break;
+
+
+threads = []
+threadFlag = 0
+count_mutex = threading.Lock()
+sums = []
+
+
+def thread_handler(srcfile, destfile):
+    count = 0
+    while True:
+        global threadFlag
+        if threadFlag == 1:
+            global count_mutex
+            count_mutex.acquire()
+            sums.append(count)
+            count_mutex.release()
+            break
+        try:
+            os.mknod(srcfile)
+            os.link(srcfile, destfile)
+            os.unlink(destfile)
+            os.remove(srcfile)
+        except:
+            print "create/link/unlink one of them failed!!!"
+        else:
+            count += 1
+
+
+def __control__(nums, sec, nfs_path):
+    for i in range(nums):
+        srcfile = nfs_path + "/s%d.py" % i
+        destfile = nfs_path + "/d%d.py" % i
+        t = threading.Thread(target=thread_handler, args=(srcfile, destfile))
+        threads.append(t)
+    for t in threads:
+        t.start()
+
+    time.sleep(sec)
+    global threadFlag
+    threadFlag = 1
+    for t in threads:
+        t.join()
+    ret = 0
+    for i in sums:
+        ret += i
+
+    result = ret / sec
+    print ("%d" % ret)
+    print result
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-r", "--read_numtasks", help="numbers of read tasks", type=int)
+    parser.add_argument("-w", "--write_numtasks", help="numbers of write tasks", type=int)
+    parser.add_argument("-rs", "--read_speed", help="io speed", type=int)
+    parser.add_argument("-ws", "--write_speed", help="io speed", type=int)
+    parser.add_argument("-c", "--c", help="select runing mothod! test/io")
+    parser.add_argument("-tn", "--test_nums", help="test times", type=int)
+    parser.add_argument("-t", "--times", help="running time(sec)", type=int)
+    parser.add_argument("-np", "--nfs_path", help="nfs_point_path")
+
+    args = parser.parse_args()
+
+    if args.c == "io":
+        __io_func(args.read_numtasks, args.read_speed, args.write_numtasks, args.write_speed)
+    elif args.c == "test":
+        __control__(args.test_nums, args.times, args.nfs_path)
+    else:
+        print ("argument fault!")
